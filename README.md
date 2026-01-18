@@ -38,32 +38,92 @@ npm install
 ### CLI
 
 ```bash
-# Dump presentation as JSON
-npx tsx src/cli.ts dump /path/to/presentation.pro
+# Show presentation info
+npx tsx src/cli.ts info song.pro
+npx tsx src/cli.ts info -v song.pro  # verbose with all slides
+
+# List slides with text
+npx tsx src/cli.ts list song.pro
+npx tsx src/cli.ts list -g Chorus song.pro  # filter by group
+
+# Extract text/lyrics
+npx tsx src/cli.ts text song.pro
+npx tsx src/cli.ts text -o lyrics.txt song.pro
+
+# Extract chord chart
+npx tsx src/cli.ts chords song.pro
+npx tsx src/cli.ts chords --format chordpro song.pro
 
 # Edit slide text
-npx tsx src/cli.ts edit /path/to/presentation.pro --slide 0 --text "New text"
+npx tsx src/cli.ts edit song.pro --cue 0 --text "New text"
+npx tsx src/cli.ts edit song.pro --cue 0 --text "New text" --dry-run
 
-# List slides
-npx tsx src/cli.ts list /path/to/presentation.pro
+# Export in different formats
+npx tsx src/cli.ts export -f ccli-report song.pro  # CCLI reporting
+npx tsx src/cli.ts export -f markdown song.pro     # Markdown
+npx tsx src/cli.ts export -f lyrics-txt song.pro   # Plain text
+
+# Batch operations
+npx tsx src/cli.ts batch --list-songs *.pro        # List all songs
+npx tsx src/cli.ts batch --ccli-report *.pro       # CCLI report for all
+
+# Debug/development
+npx tsx src/cli.ts dump song.pro                   # Full JSON dump
+npx tsx src/cli.ts decode-rtf song.pro             # Show raw RTF
+npx tsx src/cli.ts validate song.pro               # Verify file integrity
 ```
 
 ### Library
 
 ```typescript
-import { readPresentation, writePresentation, getSlideText, setSlideText } from './lib';
+import { 
+  readPresentation, 
+  writePresentation,
+  getCues,
+  getCuesByGroup,
+  getCueText,
+  setCueText,
+  getCueChords,
+  getCueNotes,
+  getMultiTracksInfo,
+  formatCCLI,
+  getMusicKey,
+  generateUuid,
+} from './src/lib/index.js';
 
 // Read a presentation
 const pres = await readPresentation('song.pro');
 console.log(pres.name);
 
-// Get slide text
-const text = getSlideText(pres, 0);
-console.log(text);
+// Get CCLI info
+const ccli = formatCCLI(pres);
+console.log(ccli);  // "Amazing Grace" by John Newton | © 1779 | CCLI #1234567
 
-// Modify and save
-setSlideText(pres, 0, 'Updated lyrics');
-await writePresentation('song.pro', pres);
+// Get music key
+const key = getMusicKey(pres);
+console.log(key);  // { original: 'G', current: 'A' }
+
+// Check MultiTracks licensing
+const mt = getMultiTracksInfo(pres);
+if (mt) {
+  console.log(`MultiTracks song ${mt.songId}, expires ${mt.licenseExpiration}`);
+}
+
+// Iterate through slides by group
+const byGroup = getCuesByGroup(pres);
+for (const [groupName, cues] of byGroup) {
+  console.log(`[${groupName}]`);
+  for (const cue of cues) {
+    console.log(getCueText(cue));
+    console.log('Chords:', getCueChords(cue));
+    console.log('Notes:', getCueNotes(cue));
+  }
+}
+
+// Modify a slide
+const cues = getCues(pres);
+setCueText(cues[0], 'Updated lyrics');
+await writePresentation('song-modified.pro', pres);
 ```
 
 ## Schema Documentation
