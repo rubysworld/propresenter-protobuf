@@ -445,4 +445,171 @@ program
     }
   });
 
+// ============================================================================
+// export - Export in various formats
+// ============================================================================
+
+program
+  .command('export')
+  .description('Export presentation in various formats')
+  .argument('<file>', 'ProPresenter presentation file (.pro)')
+  .requiredOption('-f, --format <format>', 'Output format: ccli-report, lyrics-txt, markdown')
+  .option('-o, --output <file>', 'Output file (default: stdout)')
+  .action(async (file: string, options: { format: string; output?: string }) => {
+    try {
+      const presentation = await readPresentation(file);
+      let output = '';
+      
+      switch (options.format) {
+        case 'ccli-report': {
+          // Format for CCLI reporting
+          const ccli = presentation.ccli;
+          output = [
+            `Song Title: ${ccli?.songTitle || presentation.name || 'Unknown'}`,
+            `Author: ${ccli?.author || 'Unknown'}`,
+            `CCLI Number: ${ccli?.songNumber || 'N/A'}`,
+            `Publisher: ${ccli?.publisher || 'N/A'}`,
+            `Copyright Year: ${ccli?.copyrightYear || 'N/A'}`,
+            '',
+            '---',
+            '',
+            'Lyrics:',
+          ].join('\n');
+          
+          const byGroup = getCuesByGroup(presentation);
+          for (const [groupName, cues] of byGroup) {
+            output += `\n[${groupName}]\n`;
+            for (const cue of cues) {
+              output += getCueText(cue) + '\n\n';
+            }
+          }
+          break;
+        }
+        
+        case 'lyrics-txt': {
+          // Plain text lyrics
+          const byGroup = getCuesByGroup(presentation);
+          for (const [groupName, cues] of byGroup) {
+            output += `[${groupName}]\n`;
+            for (const cue of cues) {
+              output += getCueText(cue) + '\n\n';
+            }
+          }
+          break;
+        }
+        
+        case 'markdown': {
+          // Markdown format
+          const ccli = presentation.ccli;
+          output = `# ${ccli?.songTitle || presentation.name || 'Untitled'}\n\n`;
+          
+          if (ccli?.author) output += `**Author:** ${ccli.author}\n`;
+          if (ccli?.songNumber) output += `**CCLI:** ${ccli.songNumber}\n`;
+          
+          const musicKey = getMusicKey(presentation);
+          if (musicKey.current) output += `**Key:** ${musicKey.current}\n`;
+          
+          output += '\n---\n\n';
+          
+          const byGroup = getCuesByGroup(presentation);
+          for (const [groupName, cues] of byGroup) {
+            output += `## ${groupName}\n\n`;
+            for (const cue of cues) {
+              const text = getCueText(cue);
+              const chords = getCueChords(cue);
+              
+              if (chords.length > 0) {
+                output += `*Chords: ${chords.map(c => c.chord).join(' ')}*\n\n`;
+              }
+              
+              output += text.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
+            }
+          }
+          break;
+        }
+        
+        default:
+          console.error(`Unknown format: ${options.format}`);
+          console.error('Available formats: ccli-report, lyrics-txt, markdown');
+          process.exit(1);
+      }
+      
+      if (options.output) {
+        await fs.writeFile(options.output, output);
+        console.log(`Written to ${options.output}`);
+      } else {
+        console.log(output);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// batch - Batch operations
+// ============================================================================
+
+program
+  .command('batch')
+  .description('Batch operations on multiple files')
+  .argument('<files...>', 'ProPresenter files')
+  .option('--ccli-report', 'Generate CCLI report for all songs')
+  .option('--list-songs', 'List all songs with CCLI info')
+  .option('-o, --output <file>', 'Output file (default: stdout)')
+  .action(async (files: string[], options: { ccliReport?: boolean; listSongs?: boolean; output?: string }) => {
+    try {
+      const results: any[] = [];
+      
+      for (const file of files) {
+        try {
+          const presentation = await readPresentation(file);
+          results.push({
+            file: path.basename(file),
+            name: presentation.name,
+            ccli: presentation.ccli,
+            category: presentation.category,
+          });
+        } catch (e: any) {
+          console.error(`Warning: Could not read ${file}: ${e.message}`);
+        }
+      }
+      
+      let output = '';
+      
+      if (options.listSongs) {
+        output = 'Song Title\tAuthor\tCCLI #\tPublisher\tFile\n';
+        for (const r of results) {
+          output += [
+            r.ccli?.songTitle || r.name || 'Unknown',
+            r.ccli?.author || '',
+            r.ccli?.songNumber || '',
+            r.ccli?.publisher || '',
+            r.file,
+          ].join('\t') + '\n';
+        }
+      } else if (options.ccliReport) {
+        output = 'CCLI Song Report\n';
+        output += '================\n\n';
+        for (const r of results) {
+          if (r.ccli?.songNumber) {
+            output += `${r.ccli.songNumber}\t${r.ccli.songTitle || r.name}\n`;
+          }
+        }
+      } else {
+        output = JSON.stringify(results, null, 2);
+      }
+      
+      if (options.output) {
+        await fs.writeFile(options.output, output);
+        console.log(`Written to ${options.output}`);
+      } else {
+        console.log(output);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 program.parse();
