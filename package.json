@@ -1,0 +1,23 @@
+{
+  "name": "propresenter-protobuf",
+  "version": "0.1.0",
+  "description": "Tools for reading and writing ProPresenter 7+ files",
+  "type": "module",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "generate": "npx tsx scripts/generate-proto.ts",
+    "cli": "npx tsx src/cli.ts",
+    "test": "npx tsx src/test.ts"
+  },
+  "dependencies": {
+    "protobufjs": "^7.2.6",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
+  }
+}
