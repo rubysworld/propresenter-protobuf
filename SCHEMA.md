@@ -177,6 +177,87 @@ message CCLI {
 }
 ```
 
+## Chords
+
+Chords are stored as custom text attributes with position ranges. The `ChordPro` message defines display options.
+
+```protobuf
+message Graphics.Text.ChordPro {
+  bool enabled = 1;
+  enum Notation {
+    NOTATION_CHORDS = 0;      // Letter chords (C, Am, G7)
+    NOTATION_NUMBERS = 1;     // Nashville numbers (1, 4, 5)
+    NOTATION_NUMERALS = 2;    // Roman numerals (I, IV, V)
+    NOTATION_DO_RE_MI = 3;    // Solfege
+  }
+  Notation notation = 2;
+  Color color = 3;
+}
+```
+
+Individual chords are stored in `CustomAttribute`:
+
+```protobuf
+message CustomAttribute {
+  IntRange range = 1;           // Position in text
+  string chord = 7;             // e.g., "G", "Am7", "Dsus4"
+  // ... other attributes
+}
+```
+
+## MultiTracks Licensing
+
+For songs imported from MultiTracks.com with licensing info:
+
+```protobuf
+message MultiTracksLicensing {
+  int64 song_identifier = 1;      // MultiTracks song ID
+  string customer_identifier = 2;  // Customer/church ID
+  Timestamp expiration_date = 3;
+  Timestamp license_expiration = 4;
+  enum Subscription {
+    SUBSCRIPTION_CHART_PRO = 0;
+    SUBSCRIPTION_SLIDE_PRO = 1;
+  }
+  Subscription subscription = 5;
+}
+```
+
+## Music Key
+
+```protobuf
+message Music {
+  string original_music_key = 1;  // Original key of song
+  string user_music_key = 2;      // Current/transposed key
+  MusicKeyScale original = 3;
+  MusicKeyScale user = 4;
+}
+
+message MusicKeyScale {
+  MusicKey music_key = 1;    // Enum: A, Bb, B, C, etc.
+  MusicScale music_scale = 2; // MAJOR or MINOR
+}
+```
+
+## Presenter Notes
+
+Slides can have presenter notes (visible on stage display):
+
+```protobuf
+message PresentationSlide {
+  Slide base_slide = 1;
+  Notes notes = 2;              // Presenter notes
+  repeated AlignmentGuide template_guidelines = 3;
+  URL chord_chart = 4;          // External chord chart file
+  Transition transition = 5;
+}
+
+message Notes {
+  bytes rtf_data = 1;           // RTF formatted notes
+  Graphics.Text.Attributes attributes = 2;
+}
+```
+
 ## Playlist (`.proplaylist` files)
 
 ```protobuf
