@@ -18,6 +18,11 @@ import {
   setCueText,
   getCues,
   rtfToText,
+  getCueChords,
+  getCueNotes,
+  getMultiTracksInfo,
+  formatCCLI,
+  getMusicKey,
 } from './lib/index.js';
 
 const program = new Command();
@@ -78,10 +83,91 @@ program
   .command('info')
   .description('Show presentation summary')
   .argument('<file>', 'ProPresenter presentation file (.pro)')
-  .action(async (file: string) => {
+  .option('-v, --verbose', 'Show detailed information')
+  .action(async (file: string, options: { verbose?: boolean }) => {
     try {
       const presentation = await readPresentation(file);
-      console.log(getPresentationSummary(presentation));
+      
+      console.log(`\n📄 ${presentation.name || 'Untitled'}`);
+      console.log('─'.repeat(50));
+      
+      if (presentation.category) {
+        console.log(`Category: ${presentation.category}`);
+      }
+      
+      // CCLI Info
+      const ccli = formatCCLI(presentation);
+      if (ccli) {
+        console.log(`\n🎵 ${ccli}`);
+      }
+      
+      // Music Key
+      const musicKey = getMusicKey(presentation);
+      if (musicKey.original || musicKey.current) {
+        const keyInfo = musicKey.current || musicKey.original;
+        const transposed = musicKey.original && musicKey.current && musicKey.original !== musicKey.current;
+        console.log(`Key: ${keyInfo}${transposed ? ` (transposed from ${musicKey.original})` : ''}`);
+      }
+      
+      // MultiTracks
+      const mt = getMultiTracksInfo(presentation);
+      if (mt) {
+        console.log(`\n🎹 MultiTracks: ${mt.subscription} license`);
+        console.log(`   Song ID: ${mt.songId}`);
+        if (mt.licenseExpiration) {
+          console.log(`   Expires: ${mt.licenseExpiration.toLocaleDateString()}`);
+        }
+      }
+      
+      // Slides summary
+      const byGroup = getCuesByGroup(presentation);
+      const totalCues = presentation.cues?.length || 0;
+      const groupCount = presentation.cueGroups?.length || 0;
+      
+      console.log(`\n📊 ${totalCues} slides in ${groupCount} groups`);
+      
+      // Check for chords
+      let hasChords = false;
+      for (const cue of presentation.cues || []) {
+        if (getCueChords(cue).length > 0) {
+          hasChords = true;
+          break;
+        }
+      }
+      if (hasChords) {
+        console.log(`🎸 Has embedded chords`);
+      }
+      
+      // Arrangements
+      if (presentation.arrangements && presentation.arrangements.length > 0) {
+        console.log(`\n🎼 Arrangements: ${presentation.arrangements.map(a => a.name).join(', ')}`);
+      }
+      
+      // Verbose: show all slides
+      if (options.verbose) {
+        console.log('\n' + '─'.repeat(50));
+        console.log('SLIDES:');
+        
+        for (const [groupName, cues] of byGroup) {
+          console.log(`\n[${groupName}]`);
+          for (let i = 0; i < cues.length; i++) {
+            const text = getCueText(cues[i]);
+            const chords = getCueChords(cues[i]);
+            const notes = getCueNotes(cues[i]);
+            
+            console.log(`  ${i + 1}. ${text.slice(0, 60).replace(/\n/g, ' | ')}${text.length > 60 ? '...' : ''}`);
+            
+            if (chords.length > 0) {
+              console.log(`     Chords: ${chords.map(c => c.chord).join(' ')}`);
+            }
+            if (notes) {
+              console.log(`     Notes: ${notes.slice(0, 40)}${notes.length > 40 ? '...' : ''}`);
+            }
+          }
+        }
+      }
+      
+      console.log('');
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
@@ -207,6 +293,67 @@ program
       const outputPath = options.output || file;
       await writePresentation(outputPath, presentation);
       console.log(`\nWritten to ${outputPath}`);
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// chords - Extract chord chart
+// ============================================================================
+
+program
+  .command('chords')
+  .description('Extract chord chart from a presentation')
+  .argument('<file>', 'ProPresenter presentation file (.pro)')
+  .option('-f, --format <format>', 'Output format: text, chordpro', 'text')
+  .action(async (file: string, options: { format: string }) => {
+    try {
+      const presentation = await readPresentation(file);
+      const byGroup = getCuesByGroup(presentation);
+      
+      const musicKey = getMusicKey(presentation);
+      if (musicKey.current) {
+        console.log(`Key: ${musicKey.current}\n`);
+      }
+      
+      for (const [groupName, cues] of byGroup) {
+        console.log(`[${groupName}]`);
+        
+        for (const cue of cues) {
+          const text = getCueText(cue);
+          const chords = getCueChords(cue);
+          
+          if (options.format === 'chordpro') {
+            // Output ChordPro format
+            let output = text;
+            // Insert chords at positions (work backwards to preserve positions)
+            const sortedChords = [...chords].sort((a, b) => b.position.start - a.position.start);
+            for (const chord of sortedChords) {
+              const pos = chord.position.start;
+              output = output.slice(0, pos) + `[${chord.chord}]` + output.slice(pos);
+            }
+            console.log(output);
+          } else {
+            // Plain text with chord line above
+            if (chords.length > 0) {
+              // Build chord line
+              const lines = text.split('\n');
+              for (const line of lines) {
+                const lineChords = chords.filter(c => c.position.start < text.indexOf(line) + line.length);
+                if (lineChords.length > 0) {
+                  console.log(`  ${lineChords.map(c => c.chord).join('  ')}`);
+                }
+                console.log(line);
+              }
+            } else {
+              console.log(text);
+            }
+          }
+          console.log('');
+        }
+      }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

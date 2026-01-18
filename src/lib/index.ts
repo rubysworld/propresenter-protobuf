@@ -425,6 +425,158 @@ export function getPresentationSummary(presentation: Presentation): string {
 }
 
 // ============================================================================
+// Chord Utilities
+// ============================================================================
+
+export interface ChordInfo {
+  chord: string;
+  position: { start: number; end: number };
+}
+
+/**
+ * Extract chord information from a text element's custom attributes
+ */
+export function getChords(textElement: TextElement): ChordInfo[] {
+  const chords: ChordInfo[] = [];
+  const attributes = textElement.attributes;
+  
+  if (!attributes?.customAttributes) return chords;
+  
+  for (const attr of attributes.customAttributes) {
+    if (attr.chord && attr.range) {
+      chords.push({
+        chord: attr.chord,
+        position: { start: attr.range.start, end: attr.range.end }
+      });
+    }
+  }
+  
+  return chords;
+}
+
+/**
+ * Get all chords from a slide
+ */
+export function getSlideChords(slide: Slide): ChordInfo[] {
+  const allChords: ChordInfo[] = [];
+  
+  for (const element of slide.elements || []) {
+    if (element.element?.text) {
+      allChords.push(...getChords(element.element.text));
+    }
+  }
+  
+  return allChords;
+}
+
+/**
+ * Get chords from a cue's slide
+ */
+export function getCueChords(cue: Cue): ChordInfo[] {
+  const slide = getCueSlide(cue);
+  if (!slide) return [];
+  return getSlideChords(slide);
+}
+
+// ============================================================================
+// Presenter Notes Utilities
+// ============================================================================
+
+/**
+ * Get presenter notes from a cue's slide (if it's a PresentationSlide)
+ */
+export function getCueNotes(cue: Cue): string {
+  for (const action of cue.actions || []) {
+    if (action.slide?.presentation) {
+      const presSlide = action.slide.presentation as any;
+      if (presSlide.notes?.rtfData) {
+        return rtfToText(presSlide.notes.rtfData);
+      }
+    }
+  }
+  return '';
+}
+
+// ============================================================================
+// MultiTracks Licensing Utilities
+// ============================================================================
+
+export interface MultiTracksInfo {
+  songId: number;
+  customerId: string;
+  expirationDate?: Date;
+  licenseExpiration?: Date;
+  subscription: 'CHART_PRO' | 'SLIDE_PRO';
+}
+
+/**
+ * Get MultiTracks licensing info from a presentation
+ */
+export function getMultiTracksInfo(presentation: Presentation): MultiTracksInfo | null {
+  const mt = presentation.multiTracksLicensing;
+  if (!mt) return null;
+  
+  return {
+    songId: Number(mt.songIdentifier || 0),
+    customerId: mt.customerIdentifier || '',
+    expirationDate: mt.expirationDate ? new Date(Number(mt.expirationDate.seconds) * 1000) : undefined,
+    licenseExpiration: mt.licenseExpiration ? new Date(Number(mt.licenseExpiration.seconds) * 1000) : undefined,
+    subscription: mt.subscription === 1 ? 'SLIDE_PRO' : 'CHART_PRO',
+  };
+}
+
+// ============================================================================
+// CCLI Utilities  
+// ============================================================================
+
+/**
+ * Get CCLI info formatted as a string
+ */
+export function formatCCLI(presentation: Presentation): string | null {
+  const ccli = presentation.ccli;
+  if (!ccli) return null;
+  
+  const parts: string[] = [];
+  
+  if (ccli.songTitle) parts.push(`"${ccli.songTitle}"`);
+  if (ccli.author) parts.push(`by ${ccli.author}`);
+  if (ccli.copyrightYear) parts.push(`© ${ccli.copyrightYear}`);
+  if (ccli.publisher) parts.push(ccli.publisher);
+  if (ccli.songNumber) parts.push(`CCLI #${ccli.songNumber}`);
+  
+  return parts.length > 0 ? parts.join(' | ') : null;
+}
+
+// ============================================================================
+// Music Key Utilities
+// ============================================================================
+
+const MUSIC_KEYS = [
+  'Ab', 'A', 'A#', 'Bb', 'B', 'B#', 'Cb', 'C', 'C#', 
+  'Db', 'D', 'D#', 'Eb', 'E', 'E#', 'Fb', 'F', 'F#',
+  'Gb', 'G', 'G#'
+];
+
+/**
+ * Get music key info from presentation
+ */
+export function getMusicKey(presentation: Presentation): { original?: string; current?: string } {
+  const result: { original?: string; current?: string } = {};
+  
+  if (presentation.music?.originalMusicKey) {
+    result.original = presentation.music.originalMusicKey;
+  }
+  if (presentation.music?.userMusicKey) {
+    result.current = presentation.music.userMusicKey;
+  }
+  if (presentation.musicKey) {
+    result.current = result.current || presentation.musicKey;
+  }
+  
+  return result;
+}
+
+// ============================================================================
 // UUID Utilities
 // ============================================================================
 
