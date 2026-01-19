@@ -62,11 +62,25 @@ const DEFAULT_GROUP_COLORS: Color[] = [
   { red: 0.580, green: 0.404, blue: 0.741, alpha: 1 },   // Purple
 ];
 
+export interface ChordPosition {
+  /** Character position where chord starts */
+  position: number;
+  /** Chord name (e.g., "F", "Am", "C/E") */
+  chord: string;
+}
+
+export interface SlideInput {
+  /** Slide text content */
+  text: string;
+  /** Optional chords for this slide */
+  chords?: ChordPosition[];
+}
+
 export interface SectionInput {
   /** Section name (e.g., "Verse 1", "Chorus") */
   name: string;
-  /** Array of slide text content (each string is one slide) */
-  slides: string[];
+  /** Array of slide content - can be strings or SlideInput objects */
+  slides: (string | SlideInput)[];
   /** Optional color for this section */
   color?: Color;
 }
@@ -105,13 +119,39 @@ export interface CreatePresentationOptions {
 /**
  * Create a text element for a slide
  */
-function createTextElement(text: string, options: CreatePresentationOptions): GraphicsElement {
+function createTextElement(text: string, options: CreatePresentationOptions, chords?: ChordPosition[]): GraphicsElement {
   const fontName = options.fontName || DEFAULT_FONT.name;
   const fontSize = options.fontSize || DEFAULT_FONT.size;
   const bounds = options.textBounds || DEFAULT_TEXT_BOUNDS;
 
   // Create RTF data
   const rtfData = Buffer.from(textToRtf(text, fontName, fontSize));
+  
+  // Build customAttributes with optional chords
+  const customAttributes: any[] = [];
+  if (chords && chords.length > 0) {
+    // Sort chords by position
+    const sortedChords = [...chords].sort((a, b) => a.position - b.position);
+    for (let i = 0; i < sortedChords.length; i++) {
+      const chord = sortedChords[i];
+      const nextPos = sortedChords[i + 1]?.position ?? text.length;
+      customAttributes.push({
+        range: {
+          start: chord.position,
+          end: nextPos
+        },
+        chord: chord.chord
+      });
+    }
+  } else {
+    // Default: single attribute covering whole text
+    customAttributes.push({
+      range: {
+        start: 0,
+        end: text.length
+      }
+    });
+  }
 
   const element: GraphicsElement = {
     uuid: generateUuid(),
@@ -158,14 +198,7 @@ function createTextElement(text: string, options: CreatePresentationOptions): Gr
     },
     text: {
       attributes: {
-        customAttributes: [
-          {
-            range: {
-              start: 0,
-              end: text.length
-            }
-          }
-        ],
+        customAttributes,
         font: {
           ...DEFAULT_FONT,
           name: fontName,
@@ -241,9 +274,9 @@ function createTextElement(text: string, options: CreatePresentationOptions): Gr
 /**
  * Create a slide with text
  */
-function createSlide(text: string, options: CreatePresentationOptions): Slide {
+function createSlide(text: string, options: CreatePresentationOptions, chords?: ChordPosition[]): Slide {
   const slideSize = options.slideSize || DEFAULT_SLIDE_SIZE;
-  const element = createTextElement(text, options);
+  const element = createTextElement(text, options, chords);
 
   const slideElement: SlideElement = {
     element,
@@ -267,8 +300,8 @@ function createSlide(text: string, options: CreatePresentationOptions): Slide {
 /**
  * Create a cue (slide) for the presentation
  */
-function createCue(name: string, slideText: string, options: CreatePresentationOptions): Cue {
-  const slide = createSlide(slideText, options);
+function createCue(name: string, slideText: string, options: CreatePresentationOptions, chords?: ChordPosition[]): Cue {
+  const slide = createSlide(slideText, options, chords);
   
   // Wrap the slide in a PresentationSlide structure
   const presentationSlide = {
@@ -353,9 +386,12 @@ export function createPresentation(options: CreatePresentationOptions): Presenta
     const cueIdentifiers: { string: string }[] = [];
 
     // Create cues for each slide in this section
-    section.slides.forEach((slideText, slideIndex) => {
+    section.slides.forEach((slideInput, slideIndex) => {
       const cueName = `${section.name} - Slide ${slideIndex + 1}`;
-      const cue = createCue(cueName, slideText, options);
+      // Handle both string and SlideInput formats
+      const slideText = typeof slideInput === 'string' ? slideInput : slideInput.text;
+      const chords = typeof slideInput === 'string' ? undefined : slideInput.chords;
+      const cue = createCue(cueName, slideText, options, chords);
       cues.push(cue);
       cueIdentifiers.push(cue.uuid!);
     });
