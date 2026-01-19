@@ -85,6 +85,45 @@ export interface SectionInput {
   color?: Color;
 }
 
+/** Music key enum values (matches ProPresenter MusicKey enum) */
+export enum MusicKey {
+  A_FLAT = 0,
+  A = 1,
+  A_SHARP = 2,
+  B_FLAT = 3,
+  B = 4,
+  B_SHARP = 5,
+  C_FLAT = 6,
+  C = 7,
+  C_SHARP = 8,
+  D_FLAT = 9,
+  D = 10,
+  D_SHARP = 11,
+  E_FLAT = 12,
+  E = 13,
+  E_SHARP = 14,
+  F_FLAT = 15,
+  F = 16,
+  F_SHARP = 17,
+  G_FLAT = 18,
+  G = 19,
+  G_SHARP = 20
+}
+
+/** Music scale enum */
+export enum MusicScale {
+  MAJOR = 0,
+  MINOR = 1
+}
+
+/** Music key configuration for transposition support */
+export interface MusicKeyConfig {
+  /** Original key of the song */
+  key: MusicKey;
+  /** Scale (major or minor) */
+  scale?: MusicScale;
+}
+
 export interface CreatePresentationOptions {
   /** Song title */
   title: string;
@@ -102,6 +141,8 @@ export interface CreatePresentationOptions {
   category?: string;
   /** Presentation notes (optional) */
   notes?: string;
+  /** Original music key for chord transposition (optional) */
+  musicKey?: MusicKeyConfig;
   /** Sections/groups with their slides */
   sections: SectionInput[];
   /** Font name (default: 'Arial') */
@@ -439,6 +480,26 @@ export function createPresentation(options: CreatePresentationOptions): Presenta
       display: true,
       album: '',
       artwork: new Uint8Array(0)
+    };
+  }
+
+  // Add music key info for chord transposition
+  if (options.musicKey) {
+    const keyNames = ['Ab', 'A', 'A#', 'Bb', 'B', 'B#', 'Cb', 'C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'E#', 'Fb', 'F', 'F#', 'Gb', 'G', 'G#'];
+    const keyName = keyNames[options.musicKey.key] || '';
+    const scale = options.musicKey.scale ?? MusicScale.MAJOR;
+    
+    (presentation as any).music = {
+      originalMusicKey: keyName,
+      userMusicKey: keyName,  // Default to same as original (no transpose)
+      original: {
+        musicKey: options.musicKey.key,
+        musicScale: scale
+      },
+      user: {
+        musicKey: options.musicKey.key,
+        musicScale: scale
+      }
     };
   }
 
