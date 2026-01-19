@@ -501,6 +501,11 @@ export function createPresentation(options: CreatePresentationOptions): Presenta
         musicScale: scale
       }
     };
+    
+    // Enable chord chart / key change button in ProPresenter
+    (presentation as any).chordChart = {
+      platform: 1
+    };
   }
 
   // Create default arrangement if requested
