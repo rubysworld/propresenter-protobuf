@@ -261,6 +261,12 @@ export function rtfToText(rtfData: Uint8Array | Buffer | string): string {
     return String.fromCharCode(parseInt(hex, 16));
   });
 
+  // Clean up ProPresenter specific formatting artifacts
+  text = text.replace(/^\\?\*;*\s*/g, '');        // Remove leading \*;;; or *;;; 
+  text = text.replace(/\\\s*$/g, '');             // Remove trailing backslashes
+  text = text.replace(/\\ /g, '\n');              // Convert backslash-space to newline
+  text = text.trim();
+
   return text;
 }
 
@@ -289,7 +295,10 @@ export function textToRtf(text: string, fontName = 'Arial', fontSize = 48): stri
 export function getSlideTextElements(slide: Slide): TextElement[] {
   const textElements: TextElement[] = [];
   
-  for (const element of slide.elements || []) {
+  // Check both slide.elements and slide.baseSlide.elements
+  const elements = slide.elements || (slide as any).baseSlide?.elements || [];
+  
+  for (const element of elements) {
     if (element.element?.text?.rtfData) {
       textElements.push(element.element.text);
     }
@@ -302,10 +311,30 @@ export function getSlideTextElements(slide: Slide): TextElement[] {
  * Get combined text from a slide
  */
 export function getSlideText(slide: Slide): string {
-  const texts = getSlideTextElements(slide)
+  // First try RTF data
+  const rtfTexts = getSlideTextElements(slide)
     .map(te => rtfToText(te.rtfData!))
     .filter(t => t.length > 0);
-  return texts.join('\n');
+  
+  if (rtfTexts.length > 0) {
+    return rtfTexts.join('\n');
+  }
+  
+  // Fallback: check element.name which sometimes contains the text
+  const elements = slide.elements || (slide as any).baseSlide?.elements || [];
+  for (const element of elements) {
+    if (element.element?.name && element.element.name.trim().length > 0) {
+      let text = element.element.name;
+      // Clean up ProPresenter formatting artifacts
+      text = text.replace(/^\\?\*;*\s*/g, '');   // Remove leading \*;;; or *;;;
+      text = text.replace(/\\+\s*$/g, '');       // Remove trailing backslashes
+      text = text.replace(/\\\s+/g, '\n');       // Convert \ followed by space to newlines
+      text = text.replace(/\\/g, '\n');          // Convert remaining backslashes to newlines
+      return text.trim();
+    }
+  }
+  
+  return '';
 }
 
 /**
@@ -333,7 +362,8 @@ export function getCueText(cue: Cue): string {
  * Set text on a slide's first text element
  */
 export function setSlideText(slide: Slide, text: string): boolean {
-  for (const element of slide.elements || []) {
+  const elements = slide.elements || (slide as any).baseSlide?.elements || [];
+  for (const element of elements) {
     if (element.element?.text?.rtfData) {
       element.element.text.rtfData = Buffer.from(textToRtf(text));
       return true;
