@@ -621,3 +621,9 @@ export function generateUuid(): { string: string } {
   });
   return { string: uuid };
 }
+
+// ============================================================================
+// Create Presentations
+// ============================================================================
+
+export { createPresentation, type CreatePresentationOptions, type SectionInput } from './create.js';
